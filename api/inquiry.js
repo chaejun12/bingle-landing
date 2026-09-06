@@ -21,7 +21,8 @@ async function handle(req, res) {
 
   // URL은 공개값이라 기본값으로 둠
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hdkfheozxoolmbcbadrk.supabase.co';
-  const { SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO } = process.env;
+  const { SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY } = process.env;
+  const INQUIRY_TO = process.env.INQUIRY_TO || 'cjs040510@gmail.com'; // 알림 받을 주소 (환경변수로 덮어쓸 수 있음)
   if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ ok: false, error: 'env missing: SUPABASE_SERVICE_ROLE_KEY' });
 
   // 1) DB 저장 — 실패하면 에러로 응답 (프론트가 mailto로 폴백)
@@ -67,6 +68,5 @@ async function handle(req, res) {
     else { mailError = (await mail.text()).slice(0, 300); console.error('resend failed', mail.status, mailError); }
   }
 
-  const envNames = Object.keys(process.env).filter((k) => /RESEND|INQUIRY|SUPABASE/.test(k)); // 값은 절대 안 보냄, 이름만
-  return res.status(200).json({ ok: true, mailed, mailError, envNames });
+  return res.status(200).json({ ok: true, mailed, mailError });
 }
