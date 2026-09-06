@@ -19,8 +19,11 @@ async function handle(req, res) {
   }
   if (body.website) return res.status(200).json({ ok: true }); // honeypot: 봇은 조용히 무시
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO } = process.env;
-  const missing = ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'].filter((k) => !process.env[k]);
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const { SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO } = process.env;
+  const missing = [];
+  if (!SUPABASE_URL) missing.push('SUPABASE_URL');
+  if (!SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   if (missing.length) return res.status(500).json({ ok: false, error: 'env missing: ' + missing.join(', ') });
 
   // 1) DB 저장 — 실패하면 에러로 응답 (프론트가 mailto로 폴백)
@@ -35,11 +38,13 @@ async function handle(req, res) {
     body: JSON.stringify({ ...row, user_agent: req.headers['user-agent'] || null }),
   });
   if (!db.ok) {
-    console.error('supabase insert failed', db.status, await db.text());
-    return res.status(500).json({ ok: false, error: '저장에 실패했습니다.' });
+    const detail = await db.text();
+    console.error('supabase insert failed', db.status, detail);
+    return res.status(500).json({ ok: false, error: '저장에 실패했습니다.', detail: detail.slice(0, 300) });
   }
 
   // 2) 메일 알림 — 실패해도 접수는 된 것이므로 200 (로그만 남김)
+  let mailed = false, mailError = null;
   if (RESEND_API_KEY && INQUIRY_TO) {
     const lines = [
       ['팀 이름', row.team], ['팀 인원', row.size], ['팀 단계', row.stage || '-'],
@@ -60,8 +65,9 @@ async function handle(req, res) {
         html,
       }),
     });
-    if (!mail.ok) console.error('resend failed', mail.status, await mail.text());
+    if (mail.ok) mailed = true;
+    else { mailError = (await mail.text()).slice(0, 300); console.error('resend failed', mail.status, mailError); }
   }
 
-  return res.status(200).json({ ok: true });
+  return res.status(200).json({ ok: true, mailed, mailError });
 }
