@@ -67,5 +67,6 @@ async function handle(req, res) {
     else { mailError = (await mail.text()).slice(0, 300); console.error('resend failed', mail.status, mailError); }
   }
 
-  return res.status(200).json({ ok: true, mailed, mailError });
+  const envNames = Object.keys(process.env).filter((k) => /RESEND|INQUIRY|SUPABASE/.test(k)); // 값은 절대 안 보냄, 이름만
+  return res.status(200).json({ ok: true, mailed, mailError, envNames });
 }
