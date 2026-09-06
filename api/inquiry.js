@@ -1,6 +1,6 @@
-﻿// Vercel serverless function: POST /api/inquiry
-// 1) Supabase `poc_inquiries` ?뚯씠釉붿뿉 ??? 2) Resend濡??뚮┝ 硫붿씪
-// ?꾩슂???섍꼍蹂?? SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO
+// Vercel serverless function: POST /api/inquiry
+// 1) Supabase `poc_inquiries` 테이블에 저장  2) Resend로 알림 메일
+// 필요한 환경변수: SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO (SUPABASE_URL은 선택 — 기본값 있음)
 const FIELDS = ['team', 'size', 'stage', 'name', 'email', 'tools', 'pain'];
 
 module.exports = async (req, res) => {
@@ -15,18 +15,16 @@ async function handle(req, res) {
   const row = {};
   for (const k of FIELDS) row[k] = String(body[k] || '').trim().slice(0, 2000);
   if (!row.team || !row.name || !row.email || !row.pain || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email)) {
-    return res.status(400).json({ ok: false, error: '?꾩닔 ??ぉ??鍮꾩뼱 ?덇굅???대찓???뺤떇???섎せ?먯뒿?덈떎.' });
+    return res.status(400).json({ ok: false, error: '필수 항목이 비어 있거나 이메일 형식이 잘못됐습니다.' });
   }
-  if (body.website) return res.status(200).json({ ok: true }); // honeypot: 遊뉗? 議곗슜??臾댁떆
+  if (body.website) return res.status(200).json({ ok: true }); // honeypot: 봇은 조용히 무시
 
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hdkfheozxoolmbcbadrk.supabase.co'; // URL은 공개값이라 기본값으로 둠
+  // URL은 공개값이라 기본값으로 둠
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hdkfheozxoolmbcbadrk.supabase.co';
   const { SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO } = process.env;
-  const missing = [];
-  if (!SUPABASE_URL) missing.push('SUPABASE_URL');
-  if (!SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-  if (missing.length) return res.status(500).json({ ok: false, error: 'env missing: ' + missing.join(', ') });
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ ok: false, error: 'env missing: SUPABASE_SERVICE_ROLE_KEY' });
 
-  // 1) DB ??????ㅽ뙣?섎㈃ ?먮윭濡??묐떟 (?꾨줎?멸? mailto濡??대갚)
+  // 1) DB 저장 — 실패하면 에러로 응답 (프론트가 mailto로 폴백)
   const db = await fetch(`${SUPABASE_URL}/rest/v1/poc_inquiries`, {
     method: 'POST',
     headers: {
@@ -40,20 +38,20 @@ async function handle(req, res) {
   if (!db.ok) {
     const detail = await db.text();
     console.error('supabase insert failed', db.status, detail);
-    return res.status(500).json({ ok: false, error: '??μ뿉 ?ㅽ뙣?덉뒿?덈떎.', detail: detail.slice(0, 300) });
+    return res.status(500).json({ ok: false, error: '저장에 실패했습니다.', detail: detail.slice(0, 300) });
   }
 
-  // 2) 硫붿씪 ?뚮┝ ???ㅽ뙣?대룄 ?묒닔????寃껋씠誘濡?200 (濡쒓렇留??④?)
+  // 2) 메일 알림 — 실패해도 접수는 된 것이므로 200 (로그만 남김)
   let mailed = false, mailError = null;
   if (RESEND_API_KEY && INQUIRY_TO) {
     const lines = [
-      ['? ?대쫫', row.team], ['? ?몄썝', row.size], ['? ?④퀎', row.stage || '-'],
-      ['?대떦??, row.name], ['?뚯떊 ?대찓??, row.email], ['?꾩옱 ?낅Т 愿由?諛⑹떇', row.tools || '-'],
+      ['팀 이름', row.team], ['팀 인원', row.size], ['팀 단계', row.stage || '-'],
+      ['담당자', row.name], ['회신 이메일', row.email], ['현재 업무 관리 방식', row.tools || '-'],
     ];
     const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    const html = `<h2 style="font-family:sans-serif">[Bingle PoC 臾몄쓽] ${esc(row.team)}</h2>
+    const html = `<h2 style="font-family:sans-serif">[Bingle PoC 문의] ${esc(row.team)}</h2>
 <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse">${lines.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#6e6f66">${k}</td><td style="padding:4px 0"><b>${esc(v)}</b></td></tr>`).join('')}</table>
-<p style="font-family:sans-serif;font-size:14px;white-space:pre-wrap"><b>媛????怨좊?</b>\n${esc(row.pain)}</p>`;
+<p style="font-family:sans-serif;font-size:14px;white-space:pre-wrap"><b>가장 큰 고민</b>\n${esc(row.pain)}</p>`;
     const mail = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -61,7 +59,7 @@ async function handle(req, res) {
         from: process.env.INQUIRY_FROM || 'Bingle <onboarding@resend.dev>',
         to: [INQUIRY_TO],
         reply_to: row.email,
-        subject: `[Bingle PoC 臾몄쓽] ${row.team} (${row.size || '?몄썝 誘몄엯??})`,
+        subject: `[Bingle PoC 문의] ${row.team} (${row.size || '인원 미입력'})`,
         html,
       }),
     });
