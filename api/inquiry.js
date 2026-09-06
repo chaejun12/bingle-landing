@@ -4,6 +4,11 @@
 const FIELDS = ['team', 'size', 'stage', 'name', 'email', 'tools', 'pain'];
 
 module.exports = async (req, res) => {
+  try { return await handle(req, res); }
+  catch (e) { console.error('inquiry crashed', e); return res.status(500).json({ ok: false, error: String(e && e.message || e) }); }
+};
+
+async function handle(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' });
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -15,6 +20,8 @@ module.exports = async (req, res) => {
   if (body.website) return res.status(200).json({ ok: true }); // honeypot: 봇은 조용히 무시
 
   const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, INQUIRY_TO } = process.env;
+  const missing = ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'].filter((k) => !process.env[k]);
+  if (missing.length) return res.status(500).json({ ok: false, error: 'env missing: ' + missing.join(', ') });
 
   // 1) DB 저장 — 실패하면 에러로 응답 (프론트가 mailto로 폴백)
   const db = await fetch(`${SUPABASE_URL}/rest/v1/poc_inquiries`, {
@@ -57,4 +64,4 @@ module.exports = async (req, res) => {
   }
 
   return res.status(200).json({ ok: true });
-};
+}
