@@ -9,6 +9,10 @@ module.exports = async (req, res) => {
 };
 
 async function handle(req, res) {
+  // 미리보기·다른 도메인에서도 호출할 수 있게 (공개 폼)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' });
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
