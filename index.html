@@ -826,19 +826,19 @@ footer .links a:hover{color:var(--ink)}
     var btn = form.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '보내는 중…';
     var payload = {}; ['team','size','stage','name','email','tools','pain','website'].forEach(function(k){ var el = document.getElementById(k); if (el) payload[k] = el.value; });
     fetch('https://bingle-landing.vercel.app/api/inquiry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      .then(function(r){ return r.json().then(function(j){ return r.ok && j.ok; }); })
-      .then(function(ok){
-        if (!ok) throw new Error('api');
+      .then(function(r){ return r.text().then(function(t){ var j = {}; try { j = JSON.parse(t); } catch (e) {} if (!r.ok || !j.ok) throw new Error('HTTP ' + r.status + ' ' + (j.error || t.slice(0, 80))); }); })
+      .then(function(){
         done.textContent = '접수됐습니다. 2영업일 안에 ' + v('email') + ' 로 답장드릴게요.';
         done.classList.add('show'); form.reset(); btn.textContent = '접수 완료';
       })
-      .catch(function(){
+      .catch(function(err){
         btn.disabled = false; btn.textContent = 'PoC 문의 보내기';
-        done.textContent = '서버 접수가 안 돼서 메일 초안을 열었습니다. 전송이 안 되면 ' + CONTACT_EMAIL + ' 로 직접 보내주세요.';
+        done.textContent = '서버 접수가 안 됐습니다 (' + (err && err.message || err) + '). 메일 초안을 열었으니 전송이 안 되면 ' + CONTACT_EMAIL + ' 로 직접 보내주세요.';
         done.classList.add('show'); mailtoFallback();
       });
   });
 })();
 </script>
+
 </body>
 </html>
