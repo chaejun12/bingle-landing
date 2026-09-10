@@ -64,7 +64,7 @@ async function handle(req, res) {
         from: process.env.INQUIRY_FROM || 'Bingle <onboarding@resend.dev>',
         to: [INQUIRY_TO],
         reply_to: row.email,
-        subject: `[Bingle PoC 문의] ${row.team} (${row.size || '인원 미입력'})`,
+        subject: `[Bingle PoC 문의${body.variant ? ' · ' + String(body.variant).slice(0, 20) : ''}] ${row.team} (${row.size || '인원 미입력'})`,
         html,
       }),
     });
